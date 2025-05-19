@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            background: black;
+            color: #00ff00;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #console {
+            width: 600px;
+            height: 400px;
+            border: 2px solid #00ff00;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #console-content {
+            flex: 1 1 auto;
+            overflow-y: auto;
+        }
+
+        .line {
+            white-space: pre-wrap;
+        }
+
+        .prompt-line {
+            white-space: pre-wrap;
+            display: flex;
+            align-items: center;
+        }
+
+        .prompt-symbol {
+            margin-right: 4px;
+            flex: none;
+        }
+
+        .userinput {
+            flex: none;
+            min-width: 0;
+            display: inline;
+        }
+
+        .cursor {
+            animation: blink 1s steps(1) infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0;
+            }
+        }
+
+        .potato-row {
+            font-family: inherit;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .potato-row img {
+            border-radius: 4px;
+            background: #111;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="console">
+        <div id="console-content"></div>
+    </div>
+    <footer style="text-align:center; color:#00ff00; font-size:0.9em; margin-top:10px;">
+        图床Pro 2024–2025 | <a href="https://beian.miit.gov.cn/">粤ICP备2024341296号</a>
+    </footer>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const consoleContentEl = document.getElementById('console-content');
+
+            const typeMeta = [
+                { id: 1, key: 'kiln_baked', label: '经典窑烤', img: 'https://sweetpotato.imagebed.pro/assets/1_kiln_baked.png' },
+                { id: 2, key: 'oven_sliced', label: '切片烤箱', img: 'https://sweetpotato.imagebed.pro/assets/2_oven_sliced.png' },
+                { id: 3, key: 'sugar_regular', label: '蜜红薯', img: 'https://sweetpotato.imagebed.pro/assets/3_sugar_regular.png' },
+                { id: 4, key: 'sugar_double', label: '双倍蜜红薯', img: 'https://sweetpotato.imagebed.pro/assets/4_sugar_double.png' },
+                { id: 5, key: 'sugarfree', label: '代糖红薯', img: 'https://sweetpotato.imagebed.pro/assets/5_sugarfree.png' }
+            ];
+            const table = [];
+            const freezer = [];
+            let currentVersion = null;
+            let placing = false;
+
+            let currentInput = '';
+            let inputActive = false;
+            let resolveInput = null;
+            let promptDiv = null;
+
+            function println(text = '') {
+                const div = document.createElement('div');
+                div.className = 'line';
+                div.textContent = text;
+                consoleContentEl.appendChild(div);
+                consoleContentEl.scrollTop = consoleContentEl.scrollHeight;
+            }
+
+            function displayPotato(typeKey, filename = '', number = null) {
+                const meta = typeMeta.find(m => m.key === typeKey);
+                if (!meta) return;
+                const div = document.createElement('div');
+                div.className = 'line potato-row';
+                const img = document.createElement('img');
+                img.src = meta.img;
+                img.width = 24;
+                img.height = 24;
+                img.style.verticalAlign = 'middle';
+                img.style.marginRight = '8px';
+                div.appendChild(img);
+                let txt = '';
+                if (number !== null) txt += `${number}. `;
+                txt += meta.label;
+                if (filename && filename.trim()) {
+                    txt += ' -- ' + filename;
+                }
+                div.appendChild(document.createTextNode(txt));
+                consoleContentEl.appendChild(div);
+                consoleContentEl.scrollTop = consoleContentEl.scrollHeight;
+            }
+
+
+
+            function printPotatoRow(item, idx) {
+                displayPotato(item.key, item.filename, idx + 1);
+            }
+
+
+            function showPrompt() {
+                promptDiv = document.createElement('div');
+                promptDiv.className = 'prompt-line';
+                promptDiv.innerHTML =
+                    `<span class="prompt-symbol">&gt;</span><span class="userinput"></span><span class="cursor">▂</span>`;
+                consoleContentEl.appendChild(promptDiv);
+                consoleContentEl.scrollTop = consoleContentEl.scrollHeight;
+                currentInput = '';
+                inputActive = true;
+            }
+
+            function getUserInput() {
+                showPrompt();
+                return new Promise((resolve) => {
+                    resolveInput = resolve;
+                });
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (!inputActive) return;
+                const userInputSpan = promptDiv.querySelector('.userinput');
+                if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+                    currentInput += e.key;
+                } else if (e.key === 'Backspace') {
+                    currentInput = currentInput.slice(0, -1);
+                } else if (e.key === 'Enter') {
+                    inputActive = false;
+                    promptDiv.innerHTML =
+                        `<span class="prompt-symbol">&gt;</span>${currentInput}`;
+                    if (resolveInput) {
+                        resolveInput(currentInput);
+                        resolveInput = null;
+                    }
+                    return;
+                } else {
+                    return;
+                }
+                userInputSpan.textContent = currentInput;
+                promptDiv.scrollIntoView();
+            });
+
+            function getTimestamp() {
+                const now = new Date();
+                const pad = n => n.toString().padStart(2, '0');
+                return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+            }
+
+            function makeFilename(typeKey, ts, chilled) {
+                return `${typeKey}_${ts}${chilled ? '_chilled' : ''}.png`;
+            }
+            function savePotato(version, toFreezer) {
+                const meta = typeMeta[version - 1];
+                const ts = getTimestamp();
+                let filename = makeFilename(meta.key, ts, toFreezer);
+                let potato = {
+                    id: meta.id,
+                    key: meta.key,
+                    label: meta.label,
+                    img: meta.img,
+                    ts,
+                    filename,
+                    chilled: !!toFreezer
+                };
+                if (toFreezer) {
+                    freezer.push(potato);
+                    println(`已将成品保存在冰箱 ${filename}`);
+                } else {
+                    table.push(potato);
+                    println(`已将成品保存在桌子 ${filename}`);
+                }
+            }
+
+
+            function viewStock() {
+                if (table.length === 0) {
+                    println('桌子空空如也');
+                } else {
+                    println('桌子 --');
+                    typeMeta.forEach(meta => {
+                        const arr = table.filter(item => item.key === meta.key);
+                        if (arr.length > 0) {
+                            println(`${meta.id}. ${meta.label} -- ${arr.length}个`);
+                        }
+                    });
+                    table.forEach((item, idx) => {
+                        printPotatoRow(item, idx);
+                    });
+                }
+                println('');
+                if (freezer.length === 0) {
+                    println('冰箱空空如也');
+                } else {
+                    println('冰箱 --');
+                    typeMeta.forEach(meta => {
+                        const arr = freezer.filter(item => item.key === meta.key);
+                        if (arr.length > 0) {
+                            println(`${meta.id}. ${meta.label} -- ${arr.length}个`);
+                        }
+                    });
+                    freezer.forEach((item, idx) => {
+                        printPotatoRow(item, idx);
+                    });
+                }
+                println('');
+            }
+
+            async function showProgressBar() {
+                const total = 10;
+                let barEl = document.createElement('div');
+                barEl.className = 'line';
+                consoleContentEl.appendChild(barEl);
+
+                for (let i = 1; i <= total; ++i) {
+                    let percent = Math.floor(i * 100 / total);
+                    let bar = '[' +
+                        '█'.repeat(i) +
+                        ' '.repeat(total - i) +
+                        `] ${(percent < 10 ? ' ' : '')}${percent}%`;
+                    barEl.textContent = bar;
+                    barEl.scrollIntoView();
+                    await new Promise(r => setTimeout(r, 100 + Math.random() * 300));
+                }
+                barEl.textContent += ' 完成';
+            }
+
+            async function simulateSteps(v) {
+                const stepsArr = [
+                    ['清洗地瓜', '装窑升温', '窑烤进行中'],
+                    ['清洗地瓜', '切片', '烤箱加热中'],
+                    ['清洗地瓜', '切块', '熬煮糖浆', '闷煮地瓜'],
+                    ['清洗地瓜', '切块', '熬煮更多糖浆', '闷煮地瓜'],
+                    ['清洗地瓜', '切块', '加糖闷煮地瓜']
+                ];
+                const steps = stepsArr[v - 1];
+                for (let i = 0; i < steps.length; i++) {
+                    println(`步骤 ${i + 1}: ${steps[i]}`);
+                    await showProgressBar();
+                }
+                println('[完成]');
+            }
+
+            function showMainMenu() {
+                println('请选择功能：');
+                typeMeta.forEach((t, i) => displayPotato(t.key, '', i + 1));
+                println(' 6. 查看红薯 (/manage)');
+                println('输入选项编号或 /exit 退出:');
+            }
+            async function managePotatoesLoop() {
+                while (true) {
+                    viewStock();
+                    println("选择 1.桌子 2.冰箱 (b返回):");
+                    const sel = await getUserInput();
+                    if (sel === 'b') break;
+                    if (sel === '1') {
+                        if (table.length === 0) { println('桌子空空如也'); continue; }
+
+                        table.forEach((item, idx) => {
+                            printPotatoRow(item, idx);
+                        });
+                        println("选择要吃掉的红薯编号 (b返回):");
+                        const eatIdx = await getUserInput();
+                        if (eatIdx === 'b') continue;
+                        const idx = parseInt(eatIdx) - 1;
+                        if (idx >= 0 && idx < table.length) {
+                            println(`是否吃掉? (y/n):`);
+                            const yn = await getUserInput();
+                            if (yn === 'y' || yn === 'Y') {
+                                table.splice(idx, 1);
+                                println("吃掉了!\n");
+                            }
+                        }
+                    } else if (sel === '2') {
+                        if (freezer.length === 0) { println('冰箱空空如也'); continue; }
+
+                        freezer.forEach((item, idx) => {
+                            printPotatoRow(item, idx);
+                        });
+                        println("选择红薯编号 (b返回):");
+                        const fIdx = await getUserInput();
+                        if (fIdx === 'b') continue;
+                        const idx = parseInt(fIdx) - 1;
+                        if (idx >= 0 && idx < freezer.length) {
+                            println("1.加热 2.吃掉 (b返回):");
+                            const act = await getUserInput();
+                            if (act === 'b') continue;
+                            if (act === '1') {
+                                const old = freezer[idx];
+                                const newItem = { ...old, chilled: false, filename: makeFilename(old.key, getTimestamp(), false) };
+                                table.push(newItem);
+                                freezer.splice(idx, 1);
+                                println('加热完成，已放回桌子!');
+                            } else if (act === '2') {
+                                freezer.splice(idx, 1);
+                                println('吃掉了!');
+                            }
+                        }
+                    } else {
+                        println('无效输入，请输入 1/2 或 b');
+                    }
+                }
+            }
+
+            async function mainLoop() {
+                while (true) {
+                    if (placing) {
+                        if (currentVersion) {
+                            const meta = typeMeta[currentVersion - 1];
+                            displayPotato(meta.key, '');
+                        }
+
+                        const place = await getUserInput();
+                        if (place === '2') { savePotato(currentVersion, true); }
+                        else { savePotato(currentVersion, false); }
+                        placing = false; currentVersion = null;
+                        continue;
+                    }
+                    showMainMenu();
+                    const input = await getUserInput();
+                    if (input === '/exit') {
+                        println('感谢使用，再见！');
+                        break;
+                    }
+                    if (input === '/manage' || input === '6') {
+                        await managePotatoesLoop();
+                        continue;
+                    }
+                    let version = 0;
+                    try {
+                        version = parseInt(input);
+                    } catch {
+                        println('无效输入，请输入数字或 /exit');
+                        continue;
+                    }
+                    if (version >= 1 && version <= 5) {
+                        currentVersion = version;
+                        await simulateSteps(version);
+                        println('请选择放置位置: 1.桌子 2.冰箱');
+                        placing = true;
+                    } else {
+                        println('无效选项。');
+                    }
+                }
+            }
+
+            mainLoop();
+        });
+    </script>
+</body>
+
+</html>
